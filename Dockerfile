@@ -1,13 +1,14 @@
-# Stage 1: build
+# Stage 1 --- build
 FROM maven:3.9.5-eclipse-temurin-17-alpine AS build
 WORKDIR /app
 COPY pom.xml .
 COPY src ./src
 RUN mvn -q -B package -DskipTests
 
-# Stage 2: run
+# Stage 2 --- run
 FROM eclipse-temurin:17-jre-alpine
 WORKDIR /app
-COPY --from=build /app/target/hospital-order-system-0.0.1-SNAPSHOT.jar ./app.jar
+RUN mkdir -p /app/data
+COPY --from=build /app/target/*.jar app.jar
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java","-jar","app.jar"]
