@@ -60,4 +60,10 @@ public class ObservationFactory {
         c.setApplicabilityTime(applicabilityTime == null ? now : applicabilityTime);
         return c;
     }
+
+    public static class ObservationValidationException extends RuntimeException {
+        public ObservationValidationException(String message) {
+            super(message);
+        }
+    }
 }

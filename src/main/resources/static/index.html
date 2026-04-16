@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patient Observation Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <header>
+        <div class="brand">Patient Observation Tracker</div>
+        <nav>
+            <button id="nav-patients" class="nav-button active">Patients</button>
+            <button id="nav-catalog" class="nav-button">Catalogue</button>
+            <button id="nav-logs" class="nav-button">Logs</button>
+        </nav>
+    </header>
+    <main>
+        <section id="patients-section" class="page-section">
+            <div class="panel split">
+                <div class="panel-block">
+                    <h2>Patients</h2>
+                    <table id="patient-table">
+                        <thead>
+                            <tr><th>ID</th><th>Name</th><th>DOB</th><th>Note</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="panel-block">
+                    <h2>Add Patient</h2>
+                    <form id="patient-form">
+                        <label>Full name<input name="fullName" required /></label>
+                        <label>Date of birth<input name="dateOfBirth" type="date" required /></label>
+                        <label>Note<textarea name="note"></textarea></label>
+                        <button type="submit">Create patient</button>
+                    </form>
+                </div>
+            </div>
+            <div id="patient-detail" class="panel">
+                <h2>Patient detail</h2>
+                <div id="patient-detail-empty" class="empty-state">Select a patient to view observations.</div>
+                <div id="patient-detail-body" class="hidden">
+                    <div class="detail-header">
+                        <div><strong id="patient-name"></strong> <span id="patient-dob"></span></div>
+                        <button id="evaluate-rules-button">Evaluate rules</button>
+                    </div>
+                    <div class="summary-block">
+                        <h3>Current Inferences</h3>
+                        <ul id="rule-inferences"></ul>
+                    </div>
+                    <div class="panel split">
+                        <div class="panel-block">
+                            <h3>Observations</h3>
+                            <table id="observation-table">
+                                <thead>
+                                    <tr><th>ID</th><th>Type</th><th>Concept</th><th>Value</th><th>Protocol</th><th>Status</th><th>Times</th><th>Action</th></tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                        <div class="panel-block">
+                            <h3>Record Measurement</h3>
+                            <form id="measurement-form">
+                                <label>Phenomenon type<select name="phenomenonTypeId" required></select></label>
+                                <label>Amount<input name="amount" type="number" step="any" required /></label>
+                                <label>Unit<select name="unit" required></select></label>
+                                <label>Protocol<select name="protocolId"><option value="">(none)</option></select></label>
+                                <label>Applicability time<input name="applicabilityTime" type="datetime-local" /></label>
+                                <button type="submit">Record measurement</button>
+                            </form>
+                            <h3>Record Category Observation</h3>
+                            <form id="category-form">
+                                <label>Phenomenon<select name="phenomenonId" required></select></label>
+                                <label>Presence<select name="presence" required>
+                                    <option value="PRESENT">PRESENT</option>
+                                    <option value="ABSENT">ABSENT</option>
+                                </select></label>
+                                <label>Protocol<select name="protocolId"><option value="">(none)</option></select></label>
+                                <label>Applicability time<input name="applicabilityTime" type="datetime-local" /></label>
+                                <button type="submit">Record observation</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        <section id="catalog-section" class="page-section hidden">
+            <div class="panel split">
+                <div class="panel-block">
+                    <h2>Phenomenon Types</h2>
+                    <table id="phenomenon-type-table">
+                        <thead><tr><th>ID</th><th>Name</th><th>Kind</th><th>Allowed Units / Phenomena</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="panel-block">
+                    <h2>Protocols</h2>
+                    <table id="protocol-table">
+                        <thead><tr><th>ID</th><th>Name</th><th>Description</th><th>Accuracy</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="panel split">
+                <div class="panel-block">
+                    <h3>Create Phenomenon Type</h3>
+                    <form id="phenomenon-type-form">
+                        <label>Name<input name="name" required /></label>
+                        <label>Kind<select name="kind" required>
+                            <option value="QUANTITATIVE">QUANTITATIVE</option>
+                            <option value="QUALITATIVE">QUALITATIVE</option>
+                        </select></label>
+                        <label>Allowed units (comma separated)<input name="allowedUnits" /></label>
+                        <label>Phenomena (comma separated)<input name="phenomena" /></label>
+                        <button type="submit">Create phenomenon type</button>
+                    </form>
+                </div>
+                <div class="panel-block">
+                    <h3>Create Protocol</h3>
+                    <form id="protocol-form">
+                        <label>Name<input name="name" required /></label>
+                        <label>Description<textarea name="description"></textarea></label>
+                        <label>Accuracy rating<select name="accuracyRating" required>
+                            <option value="HIGH">HIGH</option>
+                            <option value="MEDIUM">MEDIUM</option>
+                            <option value="LOW">LOW</option>
+                        </select></label>
+                        <button type="submit">Create protocol</button>
+                    </form>
+                </div>
+            </div>
+        </section>
+        <section id="logs-section" class="page-section hidden">
+            <div class="panel split">
+                <div class="panel-block">
+                    <h2>Command Log</h2>
+                    <table id="command-log-table">
+                        <thead><tr><th>ID</th><th>Command</th><th>User</th><th>Time</th><th>Payload</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <div class="panel-block">
+                    <h2>Audit Log</h2>
+                    <table id="audit-log-table">
+                        <thead><tr><th>ID</th><th>Time</th><th>Patient</th><th>Observation</th><th>Event</th><th>Details</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -23,6 +23,8 @@ public abstract class Observation {
     @Enumerated(EnumType.STRING)
     private ObservationStatus status = ObservationStatus.ACTIVE;
 
+    private String rejectionReason;
+
     public Observation() {}
 
     public Long getId() { return id; }
@@ -37,4 +39,6 @@ public abstract class Observation {
     public void setProtocol(Protocol protocol) { this.protocol = protocol; }
     public ObservationStatus getStatus() { return status; }
     public void setStatus(ObservationStatus status) { this.status = status; }
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String rejectionReason) { this.rejectionReason = rejectionReason; }
 }
