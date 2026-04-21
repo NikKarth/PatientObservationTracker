@@ -1,72 +1,43 @@
 package com.example.tracker.diagnosis;
 
 import com.example.tracker.model.*;
+import com.example.tracker.model.enums.Source;
+import com.example.tracker.model.enums.StrategyType;
 import com.example.tracker.repository.AssociativeFunctionRepository;
 import com.example.tracker.repository.ObservationRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.Map;
 
 @Service
 public class DiagnosisEngine {
 
     private final ObservationRepository observationRepository;
     private final AssociativeFunctionRepository associativeFunctionRepository;
-    private final DiagnosisStrategy strategy;
+    private final Map<StrategyType, DiagnosisStrategy> strategies;
 
     public DiagnosisEngine(ObservationRepository observationRepository,
                            AssociativeFunctionRepository associativeFunctionRepository,
-                           DiagnosisStrategy strategy) {
+                           Map<StrategyType, DiagnosisStrategy> strategies) {
         this.observationRepository = observationRepository;
         this.associativeFunctionRepository = associativeFunctionRepository;
-        this.strategy = strategy;
+        this.strategies = strategies;
     }
 
-    public List<String> evaluateRulesForPatient(Patient patient) {
+    public List<EvaluationResult> evaluateRulesForPatient(Patient patient) {
         List<Observation> observations = observationRepository.findByPatientOrderByRecordingTimeDesc(patient);
-        List<String> inferences = new ArrayList<>();
+        List<EvaluationResult> results = new ArrayList<>();
         for (AssociativeFunction rule : associativeFunctionRepository.findAll()) {
-            if (strategy.evaluate(rule, observations)) {
-                String product = rule.getProductConcept();
-                if (product != null && !inferences.contains(product)) {
-                    inferences.add(product);
+            DiagnosisStrategy strategy = strategies.get(rule.getStrategyType());
+            if (strategy != null) {
+                EvaluationResult result = strategy.evaluate(rule, observations);
+                if (result.isFired()) {
+                    results.add(result);
                 }
             }
         }
-        return inferences;
-    }
-}
-
-interface DiagnosisStrategy {
-    boolean evaluate(AssociativeFunction rule, List<Observation> patientObservations);
-}
-
-@Service
-class SimpleConjunctiveStrategy implements DiagnosisStrategy {
-
-    @Override
-    public boolean evaluate(AssociativeFunction rule, List<Observation> patientObservations) {
-        Set<String> observed = new HashSet<>();
-        for (Observation o : patientObservations) {
-            if (o.getStatus() == ObservationStatus.REJECTED) continue;
-            if (o instanceof Measurement) {
-                Measurement m = (Measurement) o;
-                if (m.getPhenomenonType() != null && m.getPhenomenonType().getName() != null) {
-                    observed.add(m.getPhenomenonType().getName());
-                }
-            } else if (o instanceof CategoryObservation) {
-                CategoryObservation c = (CategoryObservation) o;
-                if (c.getPresence() == Presence.PRESENT && c.getPhenomenon() != null && c.getPhenomenon().getName() != null) {
-                    observed.add(c.getPhenomenon().getName());
-                }
-            }
-        }
-        for (String arg : rule.getArgumentConcepts()) {
-            if (!observed.contains(arg)) return false;
-        }
-        return true;
+        return results;
     }
 }

@@ -1,6 +1,7 @@
 package com.example.tracker.model;
 
 import jakarta.persistence.*;
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -23,6 +24,9 @@ public class PhenomenonType {
     @OneToMany(mappedBy = "phenomenonType", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Phenomenon> phenomena = new HashSet<>();
 
+    private BigDecimal normalMin;
+    private BigDecimal normalMax;
+
     public PhenomenonType() {}
 
     public Long getId() { return id; }
@@ -35,4 +39,8 @@ public class PhenomenonType {
     public void setAllowedUnits(Set<String> allowedUnits) { this.allowedUnits = allowedUnits; }
     public Set<Phenomenon> getPhenomena() { return phenomena; }
     public void setPhenomena(Set<Phenomenon> phenomena) { this.phenomena = phenomena; }
+    public BigDecimal getNormalMin() { return normalMin; }
+    public void setNormalMin(BigDecimal normalMin) { this.normalMin = normalMin; }
+    public BigDecimal getNormalMax() { return normalMax; }
+    public void setNormalMax(BigDecimal normalMax) { this.normalMax = normalMax; }
 }

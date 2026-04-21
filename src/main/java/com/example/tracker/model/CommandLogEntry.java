@@ -17,11 +17,14 @@ public class CommandLogEntry {
 
     private Instant executedAt;
 
-    private String user;
+    @ManyToOne
+    private User user;
+
+    private boolean undone = false;
 
     public CommandLogEntry() {}
 
-    public CommandLogEntry(String commandType, String payload, Instant executedAt, String user) {
+    public CommandLogEntry(String commandType, String payload, Instant executedAt, User user) {
         this.commandType = commandType;
         this.payload = payload;
         this.executedAt = executedAt;
@@ -36,6 +39,8 @@ public class CommandLogEntry {
     public void setPayload(String payload) { this.payload = payload; }
     public Instant getExecutedAt() { return executedAt; }
     public void setExecutedAt(Instant executedAt) { this.executedAt = executedAt; }
-    public String getUser() { return user; }
-    public void setUser(String user) { this.user = user; }
+    public User getUser() { return user; }
+    public void setUser(User user) { this.user = user; }
+    public boolean isUndone() { return undone; }
+    public void setUndone(boolean undone) { this.undone = undone; }
 }

@@ -49,8 +49,8 @@ public class TrackerController {
     }
 
     @PostMapping("/api/patients")
-    public PatientDto createPatient(@RequestBody CreatePatientRequest request) {
-        Patient patient = patientManager.createPatient(request.fullName, request.dateOfBirth, request.note);
+    public PatientDto createPatient(@RequestBody CreatePatientRequest request, @RequestHeader("X-User") String username) {
+        Patient patient = patientManager.createPatient(request.fullName, request.dateOfBirth, request.note, username);
         return PatientDto.fromEntity(patient);
     }
 
@@ -63,37 +63,39 @@ public class TrackerController {
 
     @GetMapping("/api/patients/{id}/evaluate")
     public RuleEvaluationResponse evaluateRules(@PathVariable("id") Long id) {
-        return new RuleEvaluationResponse(observationManager.evaluateRules(id));
+        return new RuleEvaluationResponse(observationManager.evaluateRules(id).stream().map(r -> r.getProductConcept()).collect(Collectors.toList()));
     }
 
     @PostMapping("/api/observations/measurement")
-    public ObservationDto createMeasurement(@RequestBody CreateMeasurementRequest request) {
+    public ObservationDto createMeasurement(@RequestBody CreateMeasurementRequest request, @RequestHeader("X-User") String username) {
         Measurement saved = observationManager.recordMeasurement(
                 request.patientId,
                 request.phenomenonTypeId,
                 request.amount,
                 request.unit,
                 request.protocolId,
-                request.applicabilityTime
+                request.applicabilityTime,
+                username
         );
         return ObservationDto.fromObservation(saved);
     }
 
     @PostMapping("/api/observations/category")
-    public ObservationDto createCategoryObservation(@RequestBody CreateCategoryObservationRequest request) {
+    public ObservationDto createCategoryObservation(@RequestBody CreateCategoryObservationRequest request, @RequestHeader("X-User") String username) {
         CategoryObservation saved = observationManager.recordCategoryObservation(
                 request.patientId,
                 request.phenomenonId,
                 request.presence,
                 request.protocolId,
-                request.applicabilityTime
+                request.applicabilityTime,
+                username
         );
         return ObservationDto.fromObservation(saved);
     }
 
     @PostMapping("/api/observations/{id}/reject")
-    public ObservationDto rejectObservation(@PathVariable("id") Long id, @RequestBody RejectObservationRequest request) {
-        Observation saved = observationManager.rejectObservation(id, request.reason);
+    public ObservationDto rejectObservation(@PathVariable("id") Long id, @RequestBody RejectObservationRequest request, @RequestHeader("X-User") String username) {
+        Observation saved = observationManager.rejectObservation(id, request.reason, username);
         return ObservationDto.fromObservation(saved);
     }
 
@@ -300,7 +302,7 @@ public class TrackerController {
             dto.id = entry.getId();
             dto.commandType = entry.getCommandType();
             dto.payload = entry.getPayload();
-            dto.user = entry.getUser();
+            dto.user = entry.getUser() != null ? entry.getUser().getUsername() : null;
             dto.executedAt = entry.getExecutedAt();
             return dto;
         }

@@ -3,14 +3,12 @@ package com.example.tracker.service;
 import com.example.tracker.command.TrackerCommands.RecordCategoryObservationCommand;
 import com.example.tracker.command.TrackerCommands.RecordMeasurementCommand;
 import com.example.tracker.command.TrackerCommands.RejectObservationCommand;
+import com.example.tracker.diagnosis.DiagnosisEngine;
+import com.example.tracker.diagnosis.EvaluationResult;
 import com.example.tracker.event.ObservationSavedEvent;
 import com.example.tracker.factory.ObservationFactory;
 import com.example.tracker.model.*;
-import com.example.tracker.repository.ObservationRepository;
-import com.example.tracker.repository.PhenomenonRepository;
-import com.example.tracker.repository.PhenomenonTypeRepository;
-import com.example.tracker.repository.ProtocolRepository;
-import com.example.tracker.diagnosis.DiagnosisEngine;
+import com.example.tracker.repository.*;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
@@ -29,6 +27,8 @@ public class ObservationManager {
     private final CommandLogService commandLogService;
     private final ApplicationEventPublisher eventPublisher;
     private final DiagnosisEngine diagnosisEngine;
+    private final ObservationProcessor observationPipeline;
+    private final UserRepository userRepository;
 
     public ObservationManager(ObservationFactory factory,
                               ObservationRepository observationRepository,
@@ -38,7 +38,9 @@ public class ObservationManager {
                               ProtocolRepository protocolRepository,
                               CommandLogService commandLogService,
                               ApplicationEventPublisher eventPublisher,
-                              DiagnosisEngine diagnosisEngine) {
+                              DiagnosisEngine diagnosisEngine,
+                              ObservationProcessor observationPipeline,
+                              UserRepository userRepository) {
         this.factory = factory;
         this.observationRepository = observationRepository;
         this.patientManager = patientManager;
@@ -48,6 +50,8 @@ public class ObservationManager {
         this.commandLogService = commandLogService;
         this.eventPublisher = eventPublisher;
         this.diagnosisEngine = diagnosisEngine;
+        this.observationPipeline = observationPipeline;
+        this.userRepository = userRepository;
     }
 
     public Measurement recordMeasurement(Long patientId,
@@ -55,15 +59,28 @@ public class ObservationManager {
                                          Double amount,
                                          String unit,
                                          Long protocolId,
-                                         Instant applicabilityTime) {
+                                         Instant applicabilityTime,
+                                         String username) {
         Patient patient = patientManager.findPatient(patientId);
         PhenomenonType phenomenonType = phenomenonTypeRepository.findById(phenomenonTypeId)
                 .orElseThrow(() -> new IllegalArgumentException("PhenomenonType not found: " + phenomenonTypeId));
         Protocol protocol = protocolId == null ? null : protocolRepository.findById(protocolId)
                 .orElseThrow(() -> new IllegalArgumentException("Protocol not found: " + protocolId));
+        User user = userRepository.findByUsername(username);
+        if (user == null) throw new IllegalArgumentException("User not found");
 
-        Measurement measurement = factory.createMeasurement(patient, phenomenonType, amount, unit, protocol, applicabilityTime);
-        RecordMeasurementCommand command = new RecordMeasurementCommand(observationRepository, commandLogService, measurement);
+        ObservationRequest request = new ObservationRequest();
+        request.setPatient(patient);
+        request.setPhenomenonType(phenomenonType);
+        request.setQuantity(new Quantity(amount == null ? null : java.math.BigDecimal.valueOf(amount), unit));
+        request.setProtocol(protocol);
+        request.setApplicabilityTime(applicabilityTime);
+        request.setUser(username);
+
+        ObservationRequest processed = observationPipeline.process(request);
+
+        Measurement measurement = factory.createMeasurement(processed);
+        RecordMeasurementCommand command = new RecordMeasurementCommand(observationRepository, commandLogService, measurement, user);
         Measurement saved = command.execute();
         eventPublisher.publishEvent(new ObservationSavedEvent(this, saved));
         return saved;
@@ -73,24 +90,39 @@ public class ObservationManager {
                                                            Long phenomenonId,
                                                            Presence presence,
                                                            Long protocolId,
-                                                           Instant applicabilityTime) {
+                                                           Instant applicabilityTime,
+                                                           String username) {
         Patient patient = patientManager.findPatient(patientId);
         Phenomenon phenomenon = phenomenonRepository.findById(phenomenonId)
                 .orElseThrow(() -> new IllegalArgumentException("Phenomenon not found: " + phenomenonId));
         Protocol protocol = protocolId == null ? null : protocolRepository.findById(protocolId)
                 .orElseThrow(() -> new IllegalArgumentException("Protocol not found: " + protocolId));
+        User user = userRepository.findByUsername(username);
+        if (user == null) throw new IllegalArgumentException("User not found");
 
-        CategoryObservation observation = factory.createCategoryObservation(patient, phenomenon, presence, protocol, applicabilityTime);
-        RecordCategoryObservationCommand command = new RecordCategoryObservationCommand(observationRepository, commandLogService, observation);
+        ObservationRequest request = new ObservationRequest();
+        request.setPatient(patient);
+        request.setPhenomenon(phenomenon);
+        request.setPresence(presence);
+        request.setProtocol(protocol);
+        request.setApplicabilityTime(applicabilityTime);
+        request.setUser(username);
+
+        ObservationRequest processed = observationPipeline.process(request);
+
+        CategoryObservation observation = factory.createCategoryObservation(processed);
+        RecordCategoryObservationCommand command = new RecordCategoryObservationCommand(observationRepository, commandLogService, observation, user);
         CategoryObservation saved = command.execute();
         eventPublisher.publishEvent(new ObservationSavedEvent(this, saved));
         return saved;
     }
 
-    public Observation rejectObservation(Long observationId, String rejectionReason) {
+    public Observation rejectObservation(Long observationId, String rejectionReason, String username) {
         Observation observation = observationRepository.findById(observationId)
                 .orElseThrow(() -> new IllegalArgumentException("Observation not found: " + observationId));
-        RejectObservationCommand command = new RejectObservationCommand(observationRepository, commandLogService, observation, rejectionReason);
+        User user = userRepository.findByUsername(username);
+        if (user == null) throw new IllegalArgumentException("User not found");
+        RejectObservationCommand command = new RejectObservationCommand(observationRepository, commandLogService, observation, rejectionReason, user);
         Observation saved = command.execute();
         eventPublisher.publishEvent(new ObservationSavedEvent(this, saved));
         return saved;
@@ -101,7 +133,7 @@ public class ObservationManager {
         return observationRepository.findByPatientOrderByRecordingTimeDesc(patient);
     }
 
-    public List<String> evaluateRules(Long patientId) {
+    public List<EvaluationResult> evaluateRules(Long patientId) {
         Patient patient = patientManager.findPatient(patientId);
         return diagnosisEngine.evaluateRulesForPatient(patient);
     }

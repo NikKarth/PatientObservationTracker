@@ -1,69 +1,45 @@
 package com.example.tracker.factory;
 
 import com.example.tracker.model.*;
+import com.example.tracker.model.enums.Source;
+import com.example.tracker.service.ObservationRequest;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
-import java.time.Instant;
 
 @Service
 public class ObservationFactory {
 
     private final Clock clock;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    @org.springframework.beans.factory.annotation.Autowired
     public ObservationFactory(Clock clock) {
         this.clock = clock == null ? Clock.systemUTC() : clock;
     }
 
-    public Measurement createMeasurement(Patient patient,
-                                         PhenomenonType phenomenonType,
-                                         Double amount,
-                                         String unit,
-                                         Protocol protocol,
-                                         Instant applicabilityTime) {
-        // validation
-        if (phenomenonType.getKind() != MeasurementKind.QUANTITATIVE) {
-            throw new ObservationValidationException("PhenomenonType is not quantitative");
-        }
-        if (unit == null || !phenomenonType.getAllowedUnits().contains(unit)) {
-            throw new ObservationValidationException("Unit is not allowed for this phenomenon type");
-        }
+    public Measurement createMeasurement(ObservationRequest request) {
         Measurement m = new Measurement();
-        m.setPatient(patient);
-        m.setPhenomenonType(phenomenonType);
-        java.math.BigDecimal amt = amount == null ? null : java.math.BigDecimal.valueOf(amount);
-        m.setQuantity(new Quantity(amt, unit));
-        m.setProtocol(protocol);
-        Instant now = Instant.now(clock);
-        m.setRecordingTime(now);
-        m.setApplicabilityTime(applicabilityTime == null ? now : applicabilityTime);
+        m.setPatient(request.getPatient());
+        m.setPhenomenonType(request.getPhenomenonType());
+        m.setQuantity(request.getQuantity());
+        m.setProtocol(request.getProtocol());
+        m.setRecordingTime(request.getRecordingTime());
+        m.setApplicabilityTime(request.getApplicabilityTime());
+        m.setAnomaly(request.isAnomaly());
+        m.setSource(Source.MANUAL);
         return m;
     }
 
-    public CategoryObservation createCategoryObservation(Patient patient,
-                                                         Phenomenon phenomenon,
-                                                         Presence presence,
-                                                         Protocol protocol,
-                                                         Instant applicabilityTime) {
-        // validation
-        if (phenomenon.getPhenomenonType().getKind() != MeasurementKind.QUALITATIVE) {
-            throw new ObservationValidationException("Phenomenon is not qualitative");
-        }
+    public CategoryObservation createCategoryObservation(ObservationRequest request) {
         CategoryObservation c = new CategoryObservation();
-        c.setPatient(patient);
-        c.setPhenomenon(phenomenon);
-        c.setPresence(presence);
-        c.setProtocol(protocol);
-        Instant now = Instant.now(clock);
-        c.setRecordingTime(now);
-        c.setApplicabilityTime(applicabilityTime == null ? now : applicabilityTime);
+        c.setPatient(request.getPatient());
+        c.setPhenomenon(request.getPhenomenon());
+        c.setPresence(request.getPresence());
+        c.setProtocol(request.getProtocol());
+        c.setRecordingTime(request.getRecordingTime());
+        c.setApplicabilityTime(request.getApplicabilityTime());
+        c.setAnomaly(request.isAnomaly());
+        c.setSource(Source.MANUAL);
         return c;
-    }
-
-    public static class ObservationValidationException extends RuntimeException {
-        public ObservationValidationException(String message) {
-            super(message);
-        }
     }
 }

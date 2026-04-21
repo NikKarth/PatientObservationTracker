@@ -1,38 +1,44 @@
 package com.example.tracker.command;
 
-import com.example.tracker.model.CategoryObservation;
-import com.example.tracker.model.Measurement;
-import com.example.tracker.model.Observation;
-import com.example.tracker.model.Patient;
+import com.example.tracker.model.*;
 import com.example.tracker.repository.ObservationRepository;
 import com.example.tracker.repository.PatientRepository;
 import com.example.tracker.service.CommandLogService;
 
 public class TrackerCommands {
 
-    public interface Command<T> {
-        T execute();
-    }
+public interface Command<T> {
+    T execute();
+    void undo() throws UnsupportedOperationException;
+}
 
     public static class CreatePatientCommand implements Command<Patient> {
 
         private final PatientRepository repository;
         private final CommandLogService logService;
         private final Patient patient;
+        private final User user;
 
         public CreatePatientCommand(PatientRepository repository,
                                     CommandLogService logService,
-                                    Patient patient) {
+                                    Patient patient,
+                                    User user) {
             this.repository = repository;
             this.logService = logService;
             this.patient = patient;
+            this.user = user;
         }
 
         @Override
         public Patient execute() {
             Patient saved = repository.save(patient);
-            logService.logCommand("CreatePatientCommand", new CreatePatientPayload(saved.getFullName(), saved.getDateOfBirth(), saved.getNote()));
+            logService.logCommand("CreatePatientCommand", new CreatePatientPayload(saved.getFullName(), saved.getDateOfBirth(), saved.getNote()), user);
             return saved;
+        }
+
+        @Override
+        public void undo() throws UnsupportedOperationException {
+            throw new UnsupportedOperationException("Cannot undo patient creation");
         }
 
         private static class CreatePatientPayload {
@@ -53,23 +59,33 @@ public class TrackerCommands {
         private final ObservationRepository repository;
         private final CommandLogService logService;
         private final Measurement measurement;
+        private final User user;
 
         public RecordMeasurementCommand(ObservationRepository repository,
                                         CommandLogService logService,
-                                        Measurement measurement) {
+                                        Measurement measurement,
+                                        User user) {
             this.repository = repository;
             this.logService = logService;
             this.measurement = measurement;
+            this.user = user;
         }
 
         @Override
         public Measurement execute() {
             Measurement saved = repository.save(measurement);
-            logService.logCommand("RecordMeasurementCommand", new MeasurementPayload(saved));
+            logService.logCommand("RecordMeasurementCommand", new MeasurementPayload(saved), user);
             return saved;
         }
 
+        @Override
+        public void undo() throws UnsupportedOperationException {
+            // Undo is handled in CommandLogService
+            throw new UnsupportedOperationException("Undo via service");
+        }
+
         private static class MeasurementPayload {
+            public final Long observationId;
             public final Long patientId;
             public final String phenomenonType;
             public final Object quantity;
@@ -77,6 +93,7 @@ public class TrackerCommands {
             public final Object applicabilityTime;
 
             MeasurementPayload(Measurement saved) {
+                this.observationId = saved.getId();
                 this.patientId = saved.getPatient() != null ? saved.getPatient().getId() : null;
                 this.phenomenonType = saved.getPhenomenonType() != null ? saved.getPhenomenonType().getName() : null;
                 this.quantity = saved.getQuantity();
@@ -91,23 +108,32 @@ public class TrackerCommands {
         private final ObservationRepository repository;
         private final CommandLogService logService;
         private final CategoryObservation observation;
+        private final User user;
 
         public RecordCategoryObservationCommand(ObservationRepository repository,
                                                 CommandLogService logService,
-                                                CategoryObservation observation) {
+                                                CategoryObservation observation,
+                                                User user) {
             this.repository = repository;
             this.logService = logService;
             this.observation = observation;
+            this.user = user;
         }
 
         @Override
         public CategoryObservation execute() {
             CategoryObservation saved = repository.save(observation);
-            logService.logCommand("RecordCategoryObservationCommand", new CategoryObservationPayload(saved));
+            logService.logCommand("RecordCategoryObservationCommand", new CategoryObservationPayload(saved), user);
             return saved;
         }
 
+        @Override
+        public void undo() throws UnsupportedOperationException {
+            throw new UnsupportedOperationException("Undo via service");
+        }
+
         private static class CategoryObservationPayload {
+            public final Long observationId;
             public final Long patientId;
             public final String phenomenon;
             public final String presence;
@@ -115,6 +141,7 @@ public class TrackerCommands {
             public final Object applicabilityTime;
 
             CategoryObservationPayload(CategoryObservation saved) {
+                this.observationId = saved.getId();
                 this.patientId = saved.getPatient() != null ? saved.getPatient().getId() : null;
                 this.phenomenon = saved.getPhenomenon() != null ? saved.getPhenomenon().getName() : null;
                 this.presence = saved.getPresence() != null ? saved.getPresence().name() : null;
@@ -130,15 +157,18 @@ public class TrackerCommands {
         private final CommandLogService logService;
         private final Observation observation;
         private final String rejectionReason;
+        private final User user;
 
         public RejectObservationCommand(ObservationRepository repository,
                                         CommandLogService logService,
                                         Observation observation,
-                                        String rejectionReason) {
+                                        String rejectionReason,
+                                        User user) {
             this.repository = repository;
             this.logService = logService;
             this.observation = observation;
             this.rejectionReason = rejectionReason;
+            this.user = user;
         }
 
         @Override
@@ -146,8 +176,13 @@ public class TrackerCommands {
             observation.setStatus(com.example.tracker.model.ObservationStatus.REJECTED);
             observation.setRejectionReason(rejectionReason);
             Observation saved = repository.save(observation);
-            logService.logCommand("RejectObservationCommand", new RejectObservationPayload(saved));
+            logService.logCommand("RejectObservationCommand", new RejectObservationPayload(saved), user);
             return saved;
+        }
+
+        @Override
+        public void undo() throws UnsupportedOperationException {
+            throw new UnsupportedOperationException("Undo via service");
         }
 
         private static class RejectObservationPayload {
