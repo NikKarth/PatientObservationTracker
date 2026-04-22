@@ -130,6 +130,31 @@
                     </form>
                 </div>
             </div>
+            <div class="panel">
+                <div class="panel-block">
+                    <h2>Associative Functions</h2>
+                    <table id="associative-function-table">
+                        <thead><tr><th>ID</th><th>Name</th><th>Arguments</th><th>Product</th><th>Strategy</th><th>Threshold</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-block">
+                    <h3>Create Associative Function</h3>
+                    <form id="associative-function-form">
+                        <label>Name<input name="name" required /></label>
+                        <label>Arguments (concept:weight pairs, comma separated)<input name="arguments" placeholder="e.g., thirst:1.0, weight loss:2.0" required /></label>
+                        <label>Product concept<input name="productConcept" required /></label>
+                        <label>Strategy<select name="strategyType" required>
+                            <option value="CONJUNCTIVE">CONJUNCTIVE</option>
+                            <option value="WEIGHTED">WEIGHTED</option>
+                        </select></label>
+                        <label>Threshold<input name="threshold" type="number" step="any" value="0" /></label>
+                        <button type="submit">Create associative function</button>
+                    </form>
+                </div>
+            </div>
         </section>
         <section id="logs-section" class="page-section hidden">
             <div class="panel split">

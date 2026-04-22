@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main, part2]
   pull_request:
     branches: [main]
 
@@ -31,7 +31,7 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Build Docker image
-        run: docker build -t ghcr.io/nikkarth/patientobservationtracker/tracker:latest .
+        run: docker build -t ghcr.io/nikkarth/patientobservationtracker/tracker:part2 .
 
       - name: Push Docker image
-        run: docker push ghcr.io/nikkarth/patientobservationtracker/tracker:latest
+        run: docker push ghcr.io/nikkarth/patientobservationtracker/tracker:part2
