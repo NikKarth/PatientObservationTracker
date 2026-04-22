@@ -31,6 +31,10 @@ public abstract class Observation {
     @Enumerated(EnumType.STRING)
     private Source source = Source.MANUAL;
 
+    @ManyToOne
+    @JoinColumn(name = "rejected_by_user_id")
+    private User rejectedBy;
+
     public Observation() {}
 
     public Long getId() { return id; }
@@ -51,4 +55,11 @@ public abstract class Observation {
     public void setAnomaly(boolean anomaly) { this.anomaly = anomaly; }
     public Source getSource() { return source; }
     public void setSource(Source source) { this.source = source; }
+    public User getRejectedBy() {
+        return rejectedBy;
+    }
+
+    public void setRejectedBy(User rejectedBy) {
+        this.rejectedBy = rejectedBy;
+    }
 }

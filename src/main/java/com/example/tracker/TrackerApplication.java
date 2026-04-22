@@ -31,6 +31,12 @@ public class TrackerApplication {
 				staffUser.setRole(Role.CLINICIAN);
 				userRepository.save(staffUser);
 			}
+			if (userRepository.findByUsername("admin") == null) {
+				User adminUser = new User();
+				adminUser.setUsername("admin");
+				adminUser.setRole(Role.ADMIN);
+				userRepository.save(adminUser);
+			}
 		};
 	}
 

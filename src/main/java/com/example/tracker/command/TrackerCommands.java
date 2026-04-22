@@ -1,9 +1,11 @@
 package com.example.tracker.command;
 
+import com.example.tracker.event.ObservationSavedEvent;
 import com.example.tracker.model.*;
 import com.example.tracker.repository.ObservationRepository;
 import com.example.tracker.repository.PatientRepository;
 import com.example.tracker.service.CommandLogService;
+import org.springframework.context.ApplicationEventPublisher;
 
 public class TrackerCommands {
 
@@ -58,30 +60,40 @@ public interface Command<T> {
 
         private final ObservationRepository repository;
         private final CommandLogService logService;
+        private final ApplicationEventPublisher eventPublisher;
         private final Measurement measurement;
         private final User user;
+        private Long observationId;
 
         public RecordMeasurementCommand(ObservationRepository repository,
                                         CommandLogService logService,
+                                        ApplicationEventPublisher eventPublisher,
                                         Measurement measurement,
                                         User user) {
             this.repository = repository;
             this.logService = logService;
+            this.eventPublisher = eventPublisher;
             this.measurement = measurement;
             this.user = user;
+            this.observationId = measurement.getId();
         }
 
         @Override
         public Measurement execute() {
             Measurement saved = repository.save(measurement);
+            this.observationId = saved.getId();
             logService.logCommand("RecordMeasurementCommand", new MeasurementPayload(saved), user);
             return saved;
         }
 
         @Override
         public void undo() throws UnsupportedOperationException {
-            // Undo is handled in CommandLogService
-            throw new UnsupportedOperationException("Undo via service");
+            Long id = observationId != null ? observationId : measurement.getId();
+            Measurement saved = (Measurement) repository.findById(id).orElseThrow();
+            saved.setStatus(ObservationStatus.REJECTED);
+            saved.setRejectionReason("Undone by user");
+            Measurement rejected = repository.save(saved);
+            eventPublisher.publishEvent(new ObservationSavedEvent(this, rejected));
         }
 
         private static class MeasurementPayload {
@@ -107,29 +119,40 @@ public interface Command<T> {
 
         private final ObservationRepository repository;
         private final CommandLogService logService;
+        private final ApplicationEventPublisher eventPublisher;
         private final CategoryObservation observation;
         private final User user;
+        private Long observationId;
 
         public RecordCategoryObservationCommand(ObservationRepository repository,
                                                 CommandLogService logService,
+                                                ApplicationEventPublisher eventPublisher,
                                                 CategoryObservation observation,
                                                 User user) {
             this.repository = repository;
             this.logService = logService;
+            this.eventPublisher = eventPublisher;
             this.observation = observation;
             this.user = user;
+            this.observationId = observation.getId();
         }
 
         @Override
         public CategoryObservation execute() {
             CategoryObservation saved = repository.save(observation);
+            this.observationId = saved.getId();
             logService.logCommand("RecordCategoryObservationCommand", new CategoryObservationPayload(saved), user);
             return saved;
         }
 
         @Override
         public void undo() throws UnsupportedOperationException {
-            throw new UnsupportedOperationException("Undo via service");
+            Long id = observationId != null ? observationId : observation.getId();
+            CategoryObservation saved = (CategoryObservation) repository.findById(id).orElseThrow();
+            saved.setStatus(ObservationStatus.REJECTED);
+            saved.setRejectionReason("Undone by user");
+            CategoryObservation rejected = repository.save(saved);
+            eventPublisher.publishEvent(new ObservationSavedEvent(this, rejected));
         }
 
         private static class CategoryObservationPayload {
@@ -155,17 +178,20 @@ public interface Command<T> {
 
         private final ObservationRepository repository;
         private final CommandLogService logService;
+        private final ApplicationEventPublisher eventPublisher;
         private final Observation observation;
         private final String rejectionReason;
         private final User user;
 
         public RejectObservationCommand(ObservationRepository repository,
                                         CommandLogService logService,
+                                        ApplicationEventPublisher eventPublisher,
                                         Observation observation,
                                         String rejectionReason,
                                         User user) {
             this.repository = repository;
             this.logService = logService;
+            this.eventPublisher = eventPublisher;
             this.observation = observation;
             this.rejectionReason = rejectionReason;
             this.user = user;
@@ -173,8 +199,9 @@ public interface Command<T> {
 
         @Override
         public Observation execute() {
-            observation.setStatus(com.example.tracker.model.ObservationStatus.REJECTED);
+            observation.setStatus(ObservationStatus.REJECTED);
             observation.setRejectionReason(rejectionReason);
+            observation.setRejectedBy(user);
             Observation saved = repository.save(observation);
             logService.logCommand("RejectObservationCommand", new RejectObservationPayload(saved), user);
             return saved;
@@ -182,7 +209,11 @@ public interface Command<T> {
 
         @Override
         public void undo() throws UnsupportedOperationException {
-            throw new UnsupportedOperationException("Undo via service");
+            observation.setStatus(ObservationStatus.ACTIVE);
+            observation.setRejectionReason(null);
+            observation.setRejectedBy(null);
+            Observation restored = repository.save(observation);
+            eventPublisher.publishEvent(new ObservationSavedEvent(this, restored));
         }
 
         private static class RejectObservationPayload {

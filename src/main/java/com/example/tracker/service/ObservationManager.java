@@ -80,7 +80,7 @@ public class ObservationManager {
         ObservationRequest processed = observationPipeline.process(request);
 
         Measurement measurement = factory.createMeasurement(processed);
-        RecordMeasurementCommand command = new RecordMeasurementCommand(observationRepository, commandLogService, measurement, user);
+        RecordMeasurementCommand command = new RecordMeasurementCommand(observationRepository, commandLogService, eventPublisher, measurement, user);
         Measurement saved = command.execute();
         eventPublisher.publishEvent(new ObservationSavedEvent(this, saved));
         return saved;
@@ -111,7 +111,7 @@ public class ObservationManager {
         ObservationRequest processed = observationPipeline.process(request);
 
         CategoryObservation observation = factory.createCategoryObservation(processed);
-        RecordCategoryObservationCommand command = new RecordCategoryObservationCommand(observationRepository, commandLogService, observation, user);
+        RecordCategoryObservationCommand command = new RecordCategoryObservationCommand(observationRepository, commandLogService, eventPublisher, observation, user);
         CategoryObservation saved = command.execute();
         eventPublisher.publishEvent(new ObservationSavedEvent(this, saved));
         return saved;
@@ -122,7 +122,8 @@ public class ObservationManager {
                 .orElseThrow(() -> new IllegalArgumentException("Observation not found: " + observationId));
         User user = userRepository.findByUsername(username);
         if (user == null) throw new IllegalArgumentException("User not found");
-        RejectObservationCommand command = new RejectObservationCommand(observationRepository, commandLogService, observation, rejectionReason, user);
+        String detailedReason = String.format("%s (Rejected by %s [%s])", rejectionReason, user.getUsername(), user.getRole());
+        RejectObservationCommand command = new RejectObservationCommand(observationRepository, commandLogService, eventPublisher, observation, detailedReason, user);
         Observation saved = command.execute();
         eventPublisher.publishEvent(new ObservationSavedEvent(this, saved));
         return saved;

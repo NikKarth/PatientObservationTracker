@@ -1,5 +1,6 @@
 const state = {
-    currentUser: 'staff',
+    currentUser: null,
+    users: [],
     patients: [],
     currentPatient: null,
     observations: [],
@@ -22,6 +23,8 @@ const elements = {
     patientDetailBody: document.getElementById('patient-detail-body'),
     patientName: document.getElementById('patient-name'),
     patientDob: document.getElementById('patient-dob'),
+    userSelect: document.getElementById('user-select'),
+    currentUserLabel: document.getElementById('current-user-label'),
     observationTableBody: document.querySelector('#observation-table tbody'),
     measurementForm: document.getElementById('measurement-form'),
     categoryForm: document.getElementById('category-form'),
@@ -48,15 +51,23 @@ const navMap = {
 };
 
 function apiGet(path) {
-    return fetch(path).then(response => response.json());
+    return fetch(path, {
+        credentials: 'same-origin'
+    }).then(response => response.json());
 }
 
 function apiPost(path, data) {
     return fetch(path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-User': state.currentUser },
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
         body: JSON.stringify(data),
-    }).then(response => response.json());
+    }).then(response => {
+        if (!response.ok) {
+            return response.text().then(text => { throw new Error(text || response.statusText); });
+        }
+        return response.text().then(text => text ? JSON.parse(text) : null);
+    });
 }
 
 function setActiveTab(tab) {
@@ -90,6 +101,27 @@ function renderPatients() {
     elements.patientTableBody.querySelectorAll('.view-button').forEach(button => {
         button.addEventListener('click', () => viewPatient(button.dataset.id));
     });
+}
+
+function renderUserOptions() {
+    elements.userSelect.innerHTML = '';
+    state.users.forEach(user => {
+        const option = document.createElement('option');
+        option.value = user.username;
+        option.textContent = `${user.username} (${user.role})`;
+        if (state.currentUser && state.currentUser.username === user.username) {
+            option.selected = true;
+        }
+        elements.userSelect.appendChild(option);
+    });
+}
+
+function updateCurrentUserDisplay() {
+    if (state.currentUser) {
+        elements.currentUserLabel.textContent = `Logged in as ${state.currentUser.username} (${state.currentUser.role})`;
+    } else {
+        elements.currentUserLabel.textContent = 'Not logged in';
+    }
 }
 
 function renderObservationFormOptions() {
@@ -218,6 +250,25 @@ function loadPatients() {
     });
 }
 
+function loadSession() {
+    return apiGet('/api/session').then(user => {
+        state.currentUser = user;
+        updateCurrentUserDisplay();
+    }).catch(() => {
+        state.currentUser = null;
+        updateCurrentUserDisplay();
+    });
+}
+
+function loginUser(username) {
+    return apiPost('/api/login', { username }).then(user => {
+        state.currentUser = user;
+        updateCurrentUserDisplay();
+        renderUserOptions();
+        return user;
+    });
+}
+
 function loadPhenomenonTypes() {
     return apiGet('/api/phenomenon-types').then(list => {
         state.phenomenonTypes = list;
@@ -235,6 +286,17 @@ function loadProtocols() {
     });
 }
 
+function loadUsers() {
+    return apiGet('/api/users').then(list => {
+        state.users = list;
+        renderUserOptions();
+        if (!state.currentUser && state.users.length > 0) {
+            return loginUser(state.users[0].username);
+        }
+        return state.currentUser;
+    });
+}
+
 function loadAssociativeFunctions() {
     return apiGet('/api/associative-functions').then(list => {
         state.associativeFunctions = list;
@@ -247,15 +309,23 @@ function loadLogs() {
         state.logs.commands = commands;
         elements.commandLogTableBody.innerHTML = '';
         commands.forEach(entry => {
+            const canUndo = !entry.undone && state.currentUser && entry.user === state.currentUser.username
+                && ['RecordMeasurementCommand', 'RecordCategoryObservationCommand', 'RejectObservationCommand'].includes(entry.commandType);
+            const action = canUndo ? `<button data-id="${entry.id}" class="undo-command-button">Undo</button>` : '';
             const row = document.createElement('tr');
             row.innerHTML = `
                 <td>${entry.id}</td>
                 <td>${entry.commandType}</td>
                 <td>${entry.user}</td>
                 <td>${new Date(entry.executedAt).toLocaleString()}</td>
+                <td>${entry.undone ? 'UNDONE' : 'ACTIVE'}</td>
                 <td><pre>${escape(entry.payload)}</pre></td>
+                <td>${action}</td>
             `;
             elements.commandLogTableBody.appendChild(row);
+        });
+        elements.commandLogTableBody.querySelectorAll('.undo-command-button').forEach(button => {
+            button.addEventListener('click', () => undoCommand(button.dataset.id));
         });
     });
     apiGet('/api/audit-log').then(entries => {
@@ -338,6 +408,17 @@ function rejectObservation(observationId) {
     });
 }
 
+function undoCommand(commandId) {
+    return apiPost(`/api/command-log/${commandId}/undo`, {}).then(() => {
+        loadLogs();
+        if (state.currentPatient) {
+            loadObservations(state.currentPatient.id).then(renderPatientDetail);
+        }
+    }).catch(error => {
+        alert('Unable to undo command: ' + error.message);
+    });
+}
+
 function evaluateRules() {
     if (!state.currentPatient) return;
     apiGet(`/api/patients/${state.currentPatient.id}/evaluate`).then(result => {
@@ -402,6 +483,7 @@ function wireEvents() {
     elements.navPatients.addEventListener('click', () => setActiveTab('patients'));
     elements.navCatalog.addEventListener('click', () => setActiveTab('catalog'));
     elements.navLogs.addEventListener('click', () => setActiveTab('logs'));
+    elements.userSelect.addEventListener('change', event => loginUser(event.target.value).then(loadLogs));
     elements.patientForm.addEventListener('submit', event => {
         event.preventDefault();
         const form = event.target;
@@ -438,9 +520,15 @@ function wireEvents() {
 
 function init() {
     wireEvents();
-    loadPatients();
-    Promise.all([loadPhenomenonTypes(), loadProtocols(), loadAssociativeFunctions()]);
-    setActiveTab('patients');
+    loadSession()
+        .then(() => Promise.all([loadUsers(), loadPhenomenonTypes(), loadProtocols(), loadAssociativeFunctions()]))
+        .then(() => {
+            loadPatients();
+            if (state.currentUser) {
+                loadLogs();
+            }
+            setActiveTab('patients');
+        });
 }
 
 document.addEventListener('DOMContentLoaded', init);

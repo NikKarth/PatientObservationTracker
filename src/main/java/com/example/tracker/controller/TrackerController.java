@@ -2,11 +2,14 @@ package com.example.tracker.controller;
 
 import com.example.tracker.model.*;
 import com.example.tracker.model.enums.StrategyType;
+import com.example.tracker.repository.UserRepository;
 import com.example.tracker.service.AuditLogService;
 import com.example.tracker.service.CatalogManager;
 import com.example.tracker.service.CommandLogService;
 import com.example.tracker.service.ObservationManager;
 import com.example.tracker.service.PatientManager;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.view.RedirectView;
 
@@ -24,17 +27,20 @@ public class TrackerController {
     private final CatalogManager catalogManager;
     private final CommandLogService commandLogService;
     private final AuditLogService auditLogService;
+    private final UserRepository userRepository;
 
     public TrackerController(PatientManager patientManager,
                              ObservationManager observationManager,
                              CatalogManager catalogManager,
                              CommandLogService commandLogService,
-                             AuditLogService auditLogService) {
+                             AuditLogService auditLogService,
+                             UserRepository userRepository) {
         this.patientManager = patientManager;
         this.observationManager = observationManager;
         this.catalogManager = catalogManager;
         this.commandLogService = commandLogService;
         this.auditLogService = auditLogService;
+        this.userRepository = userRepository;
     }
 
     @GetMapping("/")
@@ -50,7 +56,10 @@ public class TrackerController {
     }
 
     @PostMapping("/api/patients")
-    public PatientDto createPatient(@RequestBody CreatePatientRequest request, @RequestHeader("X-User") String username) {
+    public PatientDto createPatient(@RequestBody CreatePatientRequest request,
+                                    @RequestHeader(value = "X-User", required = false) String headerUsername,
+                                    @CookieValue(value = "SESSION_USER", required = false) String sessionUsername) {
+        String username = resolveUsername(headerUsername, sessionUsername);
         Patient patient = patientManager.createPatient(request.fullName, request.dateOfBirth, request.note, username);
         return PatientDto.fromEntity(patient);
     }
@@ -68,7 +77,10 @@ public class TrackerController {
     }
 
     @PostMapping("/api/observations/measurement")
-    public ObservationDto createMeasurement(@RequestBody CreateMeasurementRequest request, @RequestHeader("X-User") String username) {
+    public ObservationDto createMeasurement(@RequestBody CreateMeasurementRequest request,
+                                            @RequestHeader(value = "X-User", required = false) String headerUsername,
+                                            @CookieValue(value = "SESSION_USER", required = false) String sessionUsername) {
+        String username = resolveUsername(headerUsername, sessionUsername);
         Measurement saved = observationManager.recordMeasurement(
                 request.patientId,
                 request.phenomenonTypeId,
@@ -82,7 +94,10 @@ public class TrackerController {
     }
 
     @PostMapping("/api/observations/category")
-    public ObservationDto createCategoryObservation(@RequestBody CreateCategoryObservationRequest request, @RequestHeader("X-User") String username) {
+    public ObservationDto createCategoryObservation(@RequestBody CreateCategoryObservationRequest request,
+                                                    @RequestHeader(value = "X-User", required = false) String headerUsername,
+                                                    @CookieValue(value = "SESSION_USER", required = false) String sessionUsername) {
+        String username = resolveUsername(headerUsername, sessionUsername);
         CategoryObservation saved = observationManager.recordCategoryObservation(
                 request.patientId,
                 request.phenomenonId,
@@ -95,7 +110,11 @@ public class TrackerController {
     }
 
     @PostMapping("/api/observations/{id}/reject")
-    public ObservationDto rejectObservation(@PathVariable("id") Long id, @RequestBody RejectObservationRequest request, @RequestHeader("X-User") String username) {
+    public ObservationDto rejectObservation(@PathVariable("id") Long id,
+                                            @RequestBody RejectObservationRequest request,
+                                            @RequestHeader(value = "X-User", required = false) String headerUsername,
+                                            @CookieValue(value = "SESSION_USER", required = false) String sessionUsername) {
+        String username = resolveUsername(headerUsername, sessionUsername);
         Observation saved = observationManager.rejectObservation(id, request.reason, username);
         return ObservationDto.fromObservation(saved);
     }
@@ -151,6 +170,48 @@ public class TrackerController {
         return commandLogService.listCommands().stream()
                 .map(CommandLogDto::fromEntity)
                 .collect(Collectors.toList());
+    }
+
+    @PostMapping("/api/command-log/{id}/undo")
+    public void undoCommand(@PathVariable("id") Long commandId,
+                            @RequestHeader(value = "X-User", required = false) String headerUsername,
+                            @CookieValue(value = "SESSION_USER", required = false) String sessionUsername) {
+        String username = resolveUsername(headerUsername, sessionUsername);
+        User user = userRepository.findByUsername(username);
+        if (user == null) {
+            throw new IllegalArgumentException("User not found");
+        }
+        commandLogService.undoCommand(commandId, user);
+    }
+
+    @GetMapping("/api/users")
+    public List<UserDto> listUsers() {
+        return userRepository.findAll().stream()
+                .map(UserDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @GetMapping("/api/session")
+    public UserDto currentSession(@CookieValue(value = "SESSION_USER", required = false) String sessionUsername) {
+        if (sessionUsername == null) {
+            return null;
+        }
+        User user = userRepository.findByUsername(sessionUsername);
+        return user != null ? UserDto.fromEntity(user) : null;
+    }
+
+    @PostMapping("/api/login")
+    public UserDto login(@RequestBody LoginRequest request, HttpServletResponse response) {
+        User user = userRepository.findByUsername(request.username);
+        if (user == null) {
+            throw new IllegalArgumentException("User not found");
+        }
+        Cookie cookie = new Cookie("SESSION_USER", user.getUsername());
+        cookie.setPath("/");
+        cookie.setHttpOnly(true);
+        cookie.setMaxAge(7 * 24 * 60 * 60);
+        response.addCookie(cookie);
+        return UserDto.fromEntity(user);
     }
 
     @GetMapping("/api/audit-log")
@@ -348,6 +409,7 @@ public class TrackerController {
         public String payload;
         public String user;
         public Instant executedAt;
+        public boolean undone;
 
         public static CommandLogDto fromEntity(CommandLogEntry entry) {
             CommandLogDto dto = new CommandLogDto();
@@ -356,6 +418,7 @@ public class TrackerController {
             dto.payload = entry.getPayload();
             dto.user = entry.getUser() != null ? entry.getUser().getUsername() : null;
             dto.executedAt = entry.getExecutedAt();
+            dto.undone = entry.isUndone();
             return dto;
         }
     }
@@ -385,6 +448,32 @@ public class TrackerController {
 
         public RuleEvaluationResponse(List<String> inferences) {
             this.inferences = inferences;
+        }
+    }
+
+    private String resolveUsername(String headerUsername, String sessionUsername) {
+        String username = headerUsername != null && !headerUsername.isBlank() ? headerUsername : sessionUsername;
+        if (username == null || username.isBlank()) {
+            throw new IllegalArgumentException("User is not authenticated");
+        }
+        return username;
+    }
+
+    public static class LoginRequest {
+        public String username;
+    }
+
+    public static class UserDto {
+        public Long id;
+        public String username;
+        public String role;
+
+        public static UserDto fromEntity(User entity) {
+            UserDto dto = new UserDto();
+            dto.id = entity.getId();
+            dto.username = entity.getUsername();
+            dto.role = entity.getRole() != null ? entity.getRole().name() : null;
+            return dto;
         }
     }
 }
