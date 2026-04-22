@@ -173,7 +173,20 @@ function renderObservations() {
         const row = document.createElement('tr');
         const value = obs.type === 'measurement' ? `${obs.amount || ''} ${obs.unit || ''}` : `${obs.phenomenon || ''} (${obs.presence || ''})`;
         const anomalyLabel = obs.anomaly ? ' <span style="color: red; font-style: italic;">[ANOMALY]</span>' : '';
-        const action = obs.status === 'ACTIVE' ? `<button data-id="${obs.id}" class="reject-button">Reject</button>` : '';
+        let action = '';
+        if (obs.status === 'ACTIVE') {
+            action = `<button data-id="${obs.id}" class="reject-button">Reject</button>`;
+        } else if (obs.status === 'REJECTED') {
+            const rejectionCommand = state.logs.commands.find(cmd =>
+                cmd.commandType === 'RejectObservationCommand' &&
+                !cmd.undone &&
+                cmd.payload &&
+                JSON.parse(cmd.payload).observationId == obs.id
+            );
+            if (rejectionCommand && state.currentUser && rejectionCommand.user === state.currentUser.username) {
+                action = `<button data-id="${rejectionCommand.id}" class="undo-rejection-button">Undo Rejection</button>`;
+            }
+        }
         row.innerHTML = `
             <td>${obs.id}</td>
             <td>${obs.type}</td>
@@ -188,6 +201,9 @@ function renderObservations() {
     });
     elements.observationTableBody.querySelectorAll('.reject-button').forEach(button => {
         button.addEventListener('click', () => rejectObservation(button.dataset.id));
+    });
+    elements.observationTableBody.querySelectorAll('.undo-rejection-button').forEach(button => {
+        button.addEventListener('click', () => undoCommand(button.dataset.id));
     });
 }
 
@@ -349,7 +365,13 @@ function loadLogs() {
 function viewPatient(patientId) {
     state.currentPatient = state.patients.find(item => item.id === Number(patientId));
     if (!state.currentPatient) return;
-    loadObservations(patientId).then(() => renderPatientDetail());
+    Promise.all([
+        loadObservations(patientId),
+        apiGet('/api/command-log')
+    ]).then(([_, commands]) => {
+        state.logs.commands = commands;
+        renderPatientDetail();
+    });
 }
 
 function loadObservations(patientId) {
@@ -381,7 +403,13 @@ function createMeasurement(formData) {
     return apiPost('/api/observations/measurement', request).then(() => {
         elements.measurementForm.reset();
         renderMeasurementUnits();
-        return loadObservations(state.currentPatient.id).then(renderPatientDetail);
+        return Promise.all([
+            loadObservations(state.currentPatient.id),
+            apiGet('/api/command-log')
+        ]).then(([_, commands]) => {
+            state.logs.commands = commands;
+            renderPatientDetail();
+        });
     });
 }
 
@@ -396,7 +424,13 @@ function createCategoryObservation(formData) {
     };
     return apiPost('/api/observations/category', request).then(() => {
         elements.categoryForm.reset();
-        return loadObservations(state.currentPatient.id).then(renderPatientDetail);
+        return Promise.all([
+            loadObservations(state.currentPatient.id),
+            apiGet('/api/command-log')
+        ]).then(([_, commands]) => {
+            state.logs.commands = commands;
+            renderPatientDetail();
+        });
     });
 }
 
@@ -404,7 +438,13 @@ function rejectObservation(observationId) {
     const reason = window.prompt('Rejection reason:');
     if (!reason) return;
     return apiPost(`/api/observations/${observationId}/reject`, { reason }).then(() => {
-        return loadObservations(state.currentPatient.id).then(renderPatientDetail);
+        return Promise.all([
+            loadObservations(state.currentPatient.id),
+            apiGet('/api/command-log')
+        ]).then(([_, commands]) => {
+            state.logs.commands = commands;
+            renderPatientDetail();
+        });
     });
 }
 
@@ -412,7 +452,13 @@ function undoCommand(commandId) {
     return apiPost(`/api/command-log/${commandId}/undo`, {}).then(() => {
         loadLogs();
         if (state.currentPatient) {
-            loadObservations(state.currentPatient.id).then(renderPatientDetail);
+            Promise.all([
+                loadObservations(state.currentPatient.id),
+                apiGet('/api/command-log')
+            ]).then(([_, commands]) => {
+                state.logs.commands = commands;
+                renderPatientDetail();
+            });
         }
     }).catch(error => {
         alert('Unable to undo command: ' + error.message);
