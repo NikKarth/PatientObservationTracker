@@ -1,11 +1,14 @@
 package com.example.tracker.service;
 
 import com.example.tracker.model.*;
+import com.example.tracker.model.enums.StrategyType;
+import com.example.tracker.repository.AssociativeFunctionRepository;
 import com.example.tracker.repository.PhenomenonRepository;
 import com.example.tracker.repository.PhenomenonTypeRepository;
 import com.example.tracker.repository.ProtocolRepository;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -16,13 +19,16 @@ public class CatalogManager {
     private final PhenomenonTypeRepository phenomenonTypeRepository;
     private final PhenomenonRepository phenomenonRepository;
     private final ProtocolRepository protocolRepository;
+    private final AssociativeFunctionRepository associativeFunctionRepository;
 
     public CatalogManager(PhenomenonTypeRepository phenomenonTypeRepository,
                           PhenomenonRepository phenomenonRepository,
-                          ProtocolRepository protocolRepository) {
+                          ProtocolRepository protocolRepository,
+                          AssociativeFunctionRepository associativeFunctionRepository) {
         this.phenomenonTypeRepository = phenomenonTypeRepository;
         this.phenomenonRepository = phenomenonRepository;
         this.protocolRepository = protocolRepository;
+        this.associativeFunctionRepository = associativeFunctionRepository;
     }
 
     public PhenomenonType createPhenomenonType(String name,
@@ -60,5 +66,26 @@ public class CatalogManager {
 
     public List<Protocol> listProtocols() {
         return protocolRepository.findAll();
+    }
+
+    public AssociativeFunction createAssociativeFunction(String name, List<String> argumentPairs, String productConcept, StrategyType strategyType, double threshold) {
+        AssociativeFunction af = new AssociativeFunction();
+        af.setName(name);
+        List<ArgumentWeight> arguments = new ArrayList<>();
+        for (String pair : argumentPairs) {
+            String[] parts = pair.split(":");
+            if (parts.length == 2) {
+                arguments.add(new ArgumentWeight(parts[0].trim(), Double.parseDouble(parts[1].trim())));
+            }
+        }
+        af.setArguments(arguments);
+        af.setProductConcept(productConcept);
+        af.setStrategyType(strategyType);
+        af.setThreshold(threshold);
+        return associativeFunctionRepository.save(af);
+    }
+
+    public List<AssociativeFunction> listAssociativeFunctions() {
+        return associativeFunctionRepository.findAll();
     }
 }

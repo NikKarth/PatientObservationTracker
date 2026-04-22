@@ -1,9 +1,11 @@
 const state = {
+    currentUser: 'staff',
     patients: [],
     currentPatient: null,
     observations: [],
     phenomenonTypes: [],
     protocols: [],
+    associativeFunctions: [],
     logs: { commands: [], audit: [] },
 };
 
@@ -33,6 +35,8 @@ const elements = {
     protocolTableBody: document.querySelector('#protocol-table tbody'),
     phenomenonTypeForm: document.getElementById('phenomenon-type-form'),
     protocolForm: document.getElementById('protocol-form'),
+    associativeFunctionTableBody: document.querySelector('#associative-function-table tbody'),
+    associativeFunctionForm: document.getElementById('associative-function-form'),
     commandLogTableBody: document.querySelector('#command-log-table tbody'),
     auditLogTableBody: document.querySelector('#audit-log-table tbody'),
 };
@@ -50,7 +54,7 @@ function apiGet(path) {
 function apiPost(path, data) {
     return fetch(path, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'X-User': state.currentUser },
         body: JSON.stringify(data),
     }).then(response => response.json());
 }
@@ -191,6 +195,19 @@ function refreshCatalogue() {
         `;
         elements.protocolTableBody.appendChild(row);
     });
+    elements.associativeFunctionTableBody.innerHTML = '';
+    state.associativeFunctions.forEach(af => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${af.id}</td>
+            <td>${af.name}</td>
+            <td>${af.arguments.join(', ')}</td>
+            <td>${af.productConcept}</td>
+            <td>${af.strategyType}</td>
+            <td>${af.threshold}</td>
+        `;
+        elements.associativeFunctionTableBody.appendChild(row);
+    });
 }
 
 function loadPatients() {
@@ -213,6 +230,13 @@ function loadProtocols() {
     return apiGet('/api/protocols').then(list => {
         state.protocols = list;
         renderObservationFormOptions();
+        refreshCatalogue();
+    });
+}
+
+function loadAssociativeFunctions() {
+    return apiGet('/api/associative-functions').then(list => {
+        state.associativeFunctions = list;
         refreshCatalogue();
     });
 }
@@ -267,6 +291,9 @@ function createPatient(formData) {
     return apiPost('/api/patients', formData).then(() => {
         elements.patientForm.reset();
         return loadPatients();
+    }).catch(error => {
+        console.error('Error creating patient:', error);
+        alert('Error creating patient: ' + error.message);
     });
 }
 
@@ -351,6 +378,19 @@ function createProtocol(formData) {
     });
 }
 
+function createAssociativeFunction(formData) {
+    return apiPost('/api/associative-functions', {
+        name: formData.name,
+        arguments: formData.arguments.split(',').map(s => s.trim()),
+        productConcept: formData.productConcept,
+        strategyType: formData.strategyType,
+        threshold: parseFloat(formData.threshold) || 0,
+    }).then(() => {
+        elements.associativeFunctionForm.reset();
+        return loadAssociativeFunctions();
+    });
+}
+
 function escape(value) {
     return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -384,6 +424,11 @@ function wireEvents() {
         const form = event.target;
         createProtocol(Object.fromEntries(new FormData(form).entries()));
     });
+    elements.associativeFunctionForm.addEventListener('submit', event => {
+        event.preventDefault();
+        const form = event.target;
+        createAssociativeFunction(Object.fromEntries(new FormData(form).entries()));
+    });
     elements.evaluateRulesButton.addEventListener('click', evaluateRules);
     elements.phenomenonTypeSelect.addEventListener('change', renderMeasurementUnits);
 }
@@ -391,7 +436,7 @@ function wireEvents() {
 function init() {
     wireEvents();
     loadPatients();
-    Promise.all([loadPhenomenonTypes(), loadProtocols()]);
+    Promise.all([loadPhenomenonTypes(), loadProtocols(), loadAssociativeFunctions()]);
     setActiveTab('patients');
 }
 

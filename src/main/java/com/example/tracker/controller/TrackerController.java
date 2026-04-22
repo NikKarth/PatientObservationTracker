@@ -1,6 +1,7 @@
 package com.example.tracker.controller;
 
 import com.example.tracker.model.*;
+import com.example.tracker.model.enums.StrategyType;
 import com.example.tracker.service.AuditLogService;
 import com.example.tracker.service.CatalogManager;
 import com.example.tracker.service.CommandLogService;
@@ -128,6 +129,19 @@ public class TrackerController {
     public ProtocolDto createProtocol(@RequestBody CreateProtocolRequest request) {
         Protocol saved = catalogManager.createProtocol(request.name, request.description, request.accuracyRating);
         return ProtocolDto.fromEntity(saved);
+    }
+
+    @GetMapping("/api/associative-functions")
+    public List<AssociativeFunctionDto> listAssociativeFunctions() {
+        return catalogManager.listAssociativeFunctions().stream()
+                .map(AssociativeFunctionDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @PostMapping("/api/associative-functions")
+    public AssociativeFunctionDto createAssociativeFunction(@RequestBody CreateAssociativeFunctionRequest request) {
+        AssociativeFunction saved = catalogManager.createAssociativeFunction(request.name, request.arguments, request.productConcept, request.strategyType, request.threshold);
+        return AssociativeFunctionDto.fromEntity(saved);
     }
 
     @GetMapping("/api/command-log")
@@ -288,6 +302,34 @@ public class TrackerController {
         public String name;
         public String description;
         public AccuracyRating accuracyRating;
+    }
+
+    public static class AssociativeFunctionDto {
+        public Long id;
+        public String name;
+        public List<String> arguments;
+        public String productConcept;
+        public String strategyType;
+        public double threshold;
+
+        public static AssociativeFunctionDto fromEntity(AssociativeFunction entity) {
+            AssociativeFunctionDto dto = new AssociativeFunctionDto();
+            dto.id = entity.getId();
+            dto.name = entity.getName();
+            dto.arguments = entity.getArguments().stream().map(aw -> aw.getConcept() + ":" + aw.getWeight()).toList();
+            dto.productConcept = entity.getProductConcept();
+            dto.strategyType = entity.getStrategyType().toString();
+            dto.threshold = entity.getThreshold();
+            return dto;
+        }
+    }
+
+    public static class CreateAssociativeFunctionRequest {
+        public String name;
+        public List<String> arguments;
+        public String productConcept;
+        public StrategyType strategyType;
+        public double threshold;
     }
 
     public static class CommandLogDto {
