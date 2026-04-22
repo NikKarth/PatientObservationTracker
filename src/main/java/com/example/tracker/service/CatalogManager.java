@@ -34,12 +34,20 @@ public class CatalogManager {
     public PhenomenonType createPhenomenonType(String name,
                                                MeasurementKind kind,
                                                Set<String> allowedUnits,
-                                               List<String> phenomenonNames) {
+                                               List<String> phenomenonNames,
+                                               java.math.BigDecimal normalMin,
+                                               java.math.BigDecimal normalMax) {
         PhenomenonType type = new PhenomenonType();
         type.setName(name);
         type.setKind(kind);
         if (allowedUnits != null) {
             type.setAllowedUnits(new HashSet<>(allowedUnits));
+        }
+        if (normalMin != null) {
+            type.setNormalMin(normalMin);
+        }
+        if (normalMax != null) {
+            type.setNormalMax(normalMax);
         }
         if (kind == MeasurementKind.QUALITATIVE && phenomenonNames != null) {
             for (String phenomenonName : phenomenonNames) {

@@ -113,7 +113,9 @@ public class TrackerController {
                 request.name,
                 request.kind,
                 request.allowedUnits,
-                request.phenomena
+                request.phenomena,
+                request.normalMin,
+                request.normalMax
         );
         return PhenomenonTypeDto.fromEntity(saved);
     }
@@ -195,6 +197,7 @@ public class TrackerController {
         public String rejectionReason;
         public Instant recordingTime;
         public Instant applicabilityTime;
+        public boolean anomaly;
 
         public static ObservationDto fromObservation(Observation observation) {
             ObservationDto dto = new ObservationDto();
@@ -206,6 +209,7 @@ public class TrackerController {
             dto.recordingTime = observation.getRecordingTime();
             dto.applicabilityTime = observation.getApplicabilityTime();
             dto.protocol = observation.getProtocol() != null ? observation.getProtocol().getName() : null;
+            dto.anomaly = observation.isAnomaly();
             if (observation instanceof Measurement) {
                 Measurement measurement = (Measurement) observation;
                 dto.type = "measurement";
@@ -251,6 +255,8 @@ public class TrackerController {
         public MeasurementKind kind;
         public Set<String> allowedUnits;
         public List<PhenomenonDto> phenomena;
+        public java.math.BigDecimal normalMin;
+        public java.math.BigDecimal normalMax;
 
         public static PhenomenonTypeDto fromEntity(PhenomenonType entity) {
             PhenomenonTypeDto dto = new PhenomenonTypeDto();
@@ -259,6 +265,8 @@ public class TrackerController {
             dto.kind = entity.getKind();
             dto.allowedUnits = entity.getAllowedUnits();
             dto.phenomena = entity.getPhenomena().stream().map(PhenomenonDto::fromEntity).collect(Collectors.toList());
+            dto.normalMin = entity.getNormalMin();
+            dto.normalMax = entity.getNormalMax();
             return dto;
         }
     }
@@ -280,6 +288,8 @@ public class TrackerController {
         public MeasurementKind kind;
         public Set<String> allowedUnits;
         public List<String> phenomena;
+        public java.math.BigDecimal normalMin;
+        public java.math.BigDecimal normalMax;
     }
 
     public static class ProtocolDto {

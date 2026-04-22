@@ -140,12 +140,13 @@ function renderObservations() {
     state.observations.forEach(obs => {
         const row = document.createElement('tr');
         const value = obs.type === 'measurement' ? `${obs.amount || ''} ${obs.unit || ''}` : `${obs.phenomenon || ''} (${obs.presence || ''})`;
+        const anomalyLabel = obs.anomaly ? ' <span style="color: red; font-style: italic;">[ANOMALY]</span>' : '';
         const action = obs.status === 'ACTIVE' ? `<button data-id="${obs.id}" class="reject-button">Reject</button>` : '';
         row.innerHTML = `
             <td>${obs.id}</td>
             <td>${obs.type}</td>
             <td>${obs.type === 'measurement' ? obs.phenomenonType : obs.phenomenon || ''}</td>
-            <td>${value}</td>
+            <td>${value}${anomalyLabel}</td>
             <td>${obs.protocol || ''}</td>
             <td>${obs.status || ''}</td>
             <td>${obs.recordingTime || ''}<br/>${obs.applicabilityTime || ''}</td>
@@ -361,6 +362,8 @@ function createPhenomenonType(formData) {
         kind: formData.kind,
         allowedUnits,
         phenomena,
+        normalMin: formData.normalMin ? parseFloat(formData.normalMin) : null,
+        normalMax: formData.normalMax ? parseFloat(formData.normalMax) : null,
     }).then(() => {
         elements.phenomenonTypeForm.reset();
         return loadPhenomenonTypes();
