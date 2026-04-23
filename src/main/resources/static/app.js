@@ -5,6 +5,7 @@ const state = {
     currentPatient: null,
     observations: [],
     phenomenonTypes: [],
+    phenomena: [],
     protocols: [],
     associativeFunctions: [],
     logs: { commands: [], audit: [] },
@@ -36,6 +37,7 @@ const elements = {
     protocolSelects: document.querySelectorAll('select[name="protocolId"]'),
     phenomenonTypeTableBody: document.querySelector('#phenomenon-type-table tbody'),
     protocolTableBody: document.querySelector('#protocol-table tbody'),
+    phenomenaTableBody: document.querySelector('#phenomena-table tbody'),
     phenomenonTypeForm: document.getElementById('phenomenon-type-form'),
     protocolForm: document.getElementById('protocol-form'),
     associativeFunctionTableBody: document.querySelector('#associative-function-table tbody'),
@@ -173,6 +175,8 @@ function renderObservations() {
         const row = document.createElement('tr');
         const value = obs.type === 'measurement' ? `${obs.amount || ''} ${obs.unit || ''}` : `${obs.phenomenon || ''} (${obs.presence || ''})`;
         const anomalyLabel = obs.anomaly ? ' <span style="color: red; font-style: italic;">[ANOMALY]</span>' : '';
+        const isInferred = obs.source === 'INFERRED';
+        const italicStyle = isInferred ? 'font-style: italic; color: #999;' : '';
         let action = '';
         if (obs.status === 'ACTIVE') {
             action = `<button data-id="${obs.id}" class="reject-button">Reject</button>`;
@@ -187,6 +191,7 @@ function renderObservations() {
                 action = `<button data-id="${rejectionCommand.id}" class="undo-rejection-button">Undo Rejection</button>`;
             }
         }
+        row.style.cssText = italicStyle;
         row.innerHTML = `
             <td>${obs.id}</td>
             <td>${obs.type}</td>
@@ -228,7 +233,7 @@ function refreshCatalogue() {
             <td>${type.id}</td>
             <td>${type.name}</td>
             <td>${type.kind}</td>
-            <td>${type.kind === 'QUANTITATIVE' ? Array.from(type.allowedUnits || []).join(', ') : (type.phenomena || []).map(p => p.name).join(', ')}
+            <td>${type.kind === 'QUANTITATIVE' ? Array.from(type.allowedUnits || []).join(', ') : (type.phenomena || []).map(p => `${p.name}${p.parentConceptName ? ` (parent: ${p.parentConceptName})` : ''}`).join(', ')}
             </td>
         `;
         elements.phenomenonTypeTableBody.appendChild(row);
@@ -243,6 +248,17 @@ function refreshCatalogue() {
             <td>${protocol.accuracyRating || ''}</td>
         `;
         elements.protocolTableBody.appendChild(row);
+    });
+    elements.phenomenaTableBody.innerHTML = '';
+    state.phenomena.forEach(phenomenon => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${phenomenon.id}</td>
+            <td>${phenomenon.name}</td>
+            <td>${phenomenon.phenomenonTypeName || ''}</td>
+            <td>${phenomenon.parentConceptName || ''}</td>
+        `;
+        elements.phenomenaTableBody.appendChild(row);
     });
     elements.associativeFunctionTableBody.innerHTML = '';
     state.associativeFunctions.forEach(af => {
@@ -483,7 +499,11 @@ function evaluateRules() {
 
 function createPhenomenonType(formData) {
     const allowedUnits = formData.allowedUnits ? formData.allowedUnits.split(',').map(s => s.trim()).filter(Boolean) : [];
-    const phenomena = formData.phenomena ? formData.phenomena.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const phenomenaWithParents = formData.phenomena ? formData.phenomena.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const phenomena = phenomenaWithParents.map(p => {
+        const parts = p.split(':');
+        return { name: parts[0], parentConceptId: parts[1] ? Number(parts[1]) : null };
+    });
     return apiPost('/api/phenomenon-types', {
         name: formData.name,
         kind: formData.kind,
@@ -521,6 +541,56 @@ function createAssociativeFunction(formData) {
     });
 }
 
+function loadPhenomena() {
+    return apiGet('/api/phenomena').then(list => {
+        state.phenomena = list;
+        refreshCatalogue();
+        updateParentConceptsDropdown();
+    });
+}
+
+function updateParentConceptsDropdown() {
+    const parentConceptSelect = document.querySelector('#phenomenon-type-parent-concepts');
+    parentConceptSelect.innerHTML = '<option value="">Select parent concept (optional)</option>';
+    state.phenomena.forEach(phenomenon => {
+        const option = document.createElement('option');
+        option.value = phenomenon.id;
+        option.textContent = `${phenomenon.name}${phenomenon.parentConceptName ? ` (parent: ${phenomenon.parentConceptName})` : ''}`;
+        parentConceptSelect.appendChild(option);
+    });
+    
+    // Add event listener to help populate phenomena field
+    parentConceptSelect.addEventListener('change', function() {
+        const selectedId = this.value;
+        if (selectedId) {
+            const selectedPhenomenon = state.phenomena.find(p => p.id == selectedId);
+            if (selectedPhenomenon) {
+                const phenomenaInput = document.querySelector('#phenomenon-type-form input[name="phenomena"]');
+                const currentValue = phenomenaInput.value.trim();
+                const parentReference = `:${selectedId}`;
+                
+                // If there's already text, append with comma
+                if (currentValue) {
+                    // Check if the last entry already has a parent
+                    const entries = currentValue.split(',').map(s => s.trim());
+                    const lastEntry = entries[entries.length - 1];
+                    if (!lastEntry.includes(':')) {
+                        entries[entries.length - 1] = lastEntry + parentReference;
+                        phenomenaInput.value = entries.join(', ');
+                    } else {
+                        phenomenaInput.value = currentValue + ', ';
+                    }
+                } else {
+                    phenomenaInput.value = parentReference.substring(1); // Remove the colon
+                }
+                
+                // Reset dropdown
+                this.value = '';
+            }
+        }
+    });
+}
+
 function escape(value) {
     return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -555,6 +625,7 @@ function wireEvents() {
         const form = event.target;
         createProtocol(Object.fromEntries(new FormData(form).entries()));
     });
+
     elements.associativeFunctionForm.addEventListener('submit', event => {
         event.preventDefault();
         const form = event.target;
@@ -567,7 +638,7 @@ function wireEvents() {
 function init() {
     wireEvents();
     loadSession()
-        .then(() => Promise.all([loadUsers(), loadPhenomenonTypes(), loadProtocols(), loadAssociativeFunctions()]))
+        .then(() => Promise.all([loadUsers(), loadPhenomenonTypes(), loadProtocols(), loadAssociativeFunctions(), loadPhenomena()]))
         .then(() => {
             loadPatients();
             if (state.currentUser) {

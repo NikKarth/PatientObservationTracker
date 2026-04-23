@@ -126,6 +126,19 @@ public class TrackerController {
                 .collect(Collectors.toList());
     }
 
+    @GetMapping("/api/phenomena")
+    public List<PhenomenonDto> listPhenomena() {
+        return catalogManager.listPhenomena().stream()
+                .map(PhenomenonDto::fromEntity)
+                .collect(Collectors.toList());
+    }
+
+    @PostMapping("/api/phenomena")
+    public PhenomenonDto createPhenomenon(@RequestBody CreatePhenomenonRequest request) {
+        Phenomenon saved = catalogManager.createPhenomenon(request.name, request.phenomenonTypeId, request.parentConceptId);
+        return PhenomenonDto.fromEntity(saved);
+    }
+
     @PostMapping("/api/phenomenon-types")
     public PhenomenonTypeDto createPhenomenonType(@RequestBody CreatePhenomenonTypeRequest request) {
         PhenomenonType saved = catalogManager.createPhenomenonType(
@@ -259,6 +272,7 @@ public class TrackerController {
         public Instant recordingTime;
         public Instant applicabilityTime;
         public boolean anomaly;
+        public String source;
 
         public static ObservationDto fromObservation(Observation observation) {
             ObservationDto dto = new ObservationDto();
@@ -271,6 +285,7 @@ public class TrackerController {
             dto.applicabilityTime = observation.getApplicabilityTime();
             dto.protocol = observation.getProtocol() != null ? observation.getProtocol().getName() : null;
             dto.anomaly = observation.isAnomaly();
+            dto.source = observation.getSource() != null ? observation.getSource().name() : null;
             if (observation instanceof Measurement) {
                 Measurement measurement = (Measurement) observation;
                 dto.type = "measurement";
@@ -335,11 +350,21 @@ public class TrackerController {
     public static class PhenomenonDto {
         public Long id;
         public String name;
+        public Long parentConceptId;
+        public String parentConceptName;
+        public String phenomenonTypeName;
 
         public static PhenomenonDto fromEntity(Phenomenon entity) {
             PhenomenonDto dto = new PhenomenonDto();
             dto.id = entity.getId();
             dto.name = entity.getName();
+            if (entity.getParentConcept() != null) {
+                dto.parentConceptId = entity.getParentConcept().getId();
+                dto.parentConceptName = entity.getParentConcept().getName();
+            }
+            if (entity.getPhenomenonType() != null) {
+                dto.phenomenonTypeName = entity.getPhenomenonType().getName();
+            }
             return dto;
         }
     }
@@ -348,9 +373,14 @@ public class TrackerController {
         public String name;
         public MeasurementKind kind;
         public Set<String> allowedUnits;
-        public List<String> phenomena;
+        public List<Object> phenomena;
         public java.math.BigDecimal normalMin;
         public java.math.BigDecimal normalMax;
+    }
+
+    public static class PhenomenonInfo {
+        public String name;
+        public Long parentConceptId;
     }
 
     public static class ProtocolDto {
@@ -475,5 +505,11 @@ public class TrackerController {
             dto.role = entity.getRole() != null ? entity.getRole().name() : null;
             return dto;
         }
+    }
+
+    public static class CreatePhenomenonRequest {
+        public String name;
+        public Long phenomenonTypeId;
+        public Long parentConceptId;
     }
 }

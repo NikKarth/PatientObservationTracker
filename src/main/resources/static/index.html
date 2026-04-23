@@ -103,6 +103,13 @@
                         <tbody></tbody>
                     </table>
                 </div>
+                <div class="panel-block">
+                    <h2>Phenomena</h2>
+                    <table id="phenomena-table">
+                        <thead><tr><th>ID</th><th>Name</th><th>Type</th><th>Parent Concept</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
             </div>
             <div class="panel split">
                 <div class="panel-block">
@@ -114,7 +121,10 @@
                             <option value="QUALITATIVE">QUALITATIVE</option>
                         </select></label>
                         <label>Allowed units (comma separated)<input name="allowedUnits" /></label>
-                        <label>Phenomena (comma separated)<input name="phenomena" /></label>
+                        <label>Phenomena (format: name or name:parentConceptId, comma separated)<input name="phenomena" placeholder="e.g., fever, chills:fever, pneumonia" /></label>
+                        <label>Parent concepts available<select id="phenomenon-type-parent-concepts">
+                            <option value="">Select parent concept (optional)</option>
+                        </select></label>
                         <label>Normal min (for anomaly detection)<input name="normalMin" type="number" step="any" /></label>
                         <label>Normal max (for anomaly detection)<input name="normalMax" type="number" step="any" /></label>
                         <button type="submit">Create phenomenon type</button>

@@ -34,7 +34,7 @@ public class CatalogManager {
     public PhenomenonType createPhenomenonType(String name,
                                                MeasurementKind kind,
                                                Set<String> allowedUnits,
-                                               List<String> phenomenonNames,
+                                               List<Object> phenomenaList,
                                                java.math.BigDecimal normalMin,
                                                java.math.BigDecimal normalMax) {
         PhenomenonType type = new PhenomenonType();
@@ -49,12 +49,42 @@ public class CatalogManager {
         if (normalMax != null) {
             type.setNormalMax(normalMax);
         }
-        if (kind == MeasurementKind.QUALITATIVE && phenomenonNames != null) {
-            for (String phenomenonName : phenomenonNames) {
+        if (kind == MeasurementKind.QUALITATIVE && phenomenaList != null) {
+            for (Object phenomenonObj : phenomenaList) {
                 Phenomenon phenomenon = new Phenomenon();
-                phenomenon.setName(phenomenonName);
-                phenomenon.setPhenomenonType(type);
-                type.getPhenomena().add(phenomenon);
+                String phenomenonName = null;
+                Long parentConceptId = null;
+                
+                if (phenomenonObj instanceof String) {
+                    phenomenonName = (String) phenomenonObj;
+                } else if (phenomenonObj instanceof java.util.Map) {
+                    java.util.Map<String, Object> map = (java.util.Map<String, Object>) phenomenonObj;
+                    phenomenonName = (String) map.get("name");
+                    Object parentId = map.get("parentConceptId");
+                    if (parentId != null) {
+                        if (parentId instanceof Number) {
+                            parentConceptId = ((Number) parentId).longValue();
+                        } else if (parentId instanceof String) {
+                            try {
+                                parentConceptId = Long.parseLong((String) parentId);
+                            } catch (NumberFormatException e) {
+                                // parentConceptId remains null
+                            }
+                        }
+                    }
+                }
+                
+                if (phenomenonName != null) {
+                    phenomenon.setName(phenomenonName);
+                    phenomenon.setPhenomenonType(type);
+                    if (parentConceptId != null) {
+                        Phenomenon parentConcept = phenomenonRepository.findById(parentConceptId).orElse(null);
+                        if (parentConcept != null) {
+                            phenomenon.setParentConcept(parentConcept);
+                        }
+                    }
+                    type.getPhenomena().add(phenomenon);
+                }
             }
         }
         return phenomenonTypeRepository.save(type);
@@ -62,6 +92,24 @@ public class CatalogManager {
 
     public List<PhenomenonType> listPhenomenonTypes() {
         return phenomenonTypeRepository.findAll();
+    }
+
+    public List<Phenomenon> listPhenomena() {
+        return phenomenonRepository.findAll();
+    }
+
+    public Phenomenon createPhenomenon(String name, Long phenomenonTypeId, Long parentConceptId) {
+        Phenomenon phenomenon = new Phenomenon();
+        phenomenon.setName(name);
+        PhenomenonType type = phenomenonTypeRepository.findById(phenomenonTypeId)
+                .orElseThrow(() -> new IllegalArgumentException("PhenomenonType not found: " + phenomenonTypeId));
+        phenomenon.setPhenomenonType(type);
+        if (parentConceptId != null) {
+            Phenomenon parentConcept = phenomenonRepository.findById(parentConceptId)
+                    .orElseThrow(() -> new IllegalArgumentException("Parent concept not found: " + parentConceptId));
+            phenomenon.setParentConcept(parentConcept);
+        }
+        return phenomenonRepository.save(phenomenon);
     }
 
     public Protocol createProtocol(String name, String description, AccuracyRating accuracyRating) {
